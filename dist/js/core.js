@@ -247,6 +247,21 @@ function showUsername() {
 
 	usernameOutput.classList.add("is-shown")
 	document.querySelector("#active-username .username").innerHTML = username
+
+	adjustFontSize()
+}
+
+function adjustFontSize() {
+    const element = document.querySelector('.username');
+    let fontSize = 20;
+    element.style.fontSize = fontSize + 'px';
+
+    while (element.scrollWidth > element.clientWidth && fontSize > 10) {
+		consoleDebug(fontSize);
+		
+        fontSize -= 1;
+        element.style.fontSize = fontSize + 'px';
+    }
 }
 
 /**
