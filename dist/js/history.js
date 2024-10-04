@@ -3,7 +3,7 @@
  * SPECIFICATION HISTORY
  */
 
-const defaultLimit = 10
+const defaultLimit = 100000
 const defaultDateOrder = "desc"
 let renderedProperties = []
 
