@@ -11,6 +11,7 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 
 // Elements
 const loginForm = document.getElementById("login-form")
+const loginCover = document.querySelector(".login-cover")
 const loginButton = document.getElementById("login-button")
 const loginGuest = document.getElementById("login-guest-button")
 const loginSSOButton = document.getElementById("login-sso-button")
@@ -26,6 +27,17 @@ const loginDivider = document.querySelector(".login-divider")
 const genericErrorMessage = "Unable to login."
 const clientErrorMessage = "Cannot access client."
 const privateErrorMessage = "Please use a non-private window."
+const atCapacityErrorMessage = `The site has reached max users.
+Please try again later.
+The buttons should enable when the site is available.`
+const unscheduledMaintenanceMessage = `The site is currently under unscheduled maintenance. 
+We apologize for the inconvenience.
+This message will disappear once the site is back online.`
+
+// Gloabl variables
+let interval;
+let imageElements = [];
+let currentIndex = 0;
 
 // DriveWorks Live Client
 let client;
@@ -34,6 +46,7 @@ let client;
 	 * On page load.
 	 */
 (async function () {
+	// showLoginNotice(unscheduledMaintenanceMessage, "error")
 	// Check localStorage support (show warning if not e.g. <= iOS 10 Private Window)
 	if (!localStorageSupported()) {
 		removeSkeleton()
@@ -108,7 +121,8 @@ async function dwClientLoaded() {
 		dwClientLoadError()
 	} else {
 		startPageFunctions()
-		enableButtons()
+		// Check for active sessions before showing login
+		await checkActiveSessionsBeforeLogin();
 	}
 
 }
@@ -254,47 +268,57 @@ function loginError(noticeText, error = null) {
 }
 
 /**
- * Set login screen notice.
+ * Set login screen notice (always stores in localStorage).
  *
  * @param {string} text - The message to display when directed to the login screen.
  * @param {string} [state] - The type of message state (error/success/info).
  */
 function setLoginNotice(text, state = "info") {
-	const notice = JSON.stringify({text: text, state: state})
-	localStorage.setItem("loginNotice", notice)
+    const notice = JSON.stringify({ text: text, state: state });
+    localStorage.setItem("loginNotice", notice);
 }
 
 /**
- * Show notice on login form.
+ * Show notice on login form. Optionally, pass text and state directly, or use localStorage if no arguments are provided.
+ *
+ * @param {string} [text] - Optional message to display (if provided, bypasses localStorage).
+ * @param {string} [state] - Optional state for the notice ("error", "success", "info"). Defaults to "info".
  */
-function showLoginNotice() {
-	const notice = JSON.parse(localStorage.getItem("loginNotice"))
+function showLoginNotice(text = null, state = "info") {
+    let noticeToShow;
 
-	if (!notice) {
-		return
-	}
+    // If text is passed, use it to create the notice, otherwise, pull from localStorage
+    if (text) {
+        noticeToShow = { text, state };
+    } else {
+        const storedNotice = localStorage.getItem("loginNotice");
+        if (!storedNotice) return;
+        noticeToShow = JSON.parse(storedNotice);
+    }
 
-	let state = notice.state
+    // Default to "info" if state isn't provided
+    let noticeState = noticeToShow.state || "info";
 
-	if (!state) {
-		state = "neutral"
-	}
+    // Display feedback
+    loginNotice.innerText = noticeToShow.text;
+    loginNotice.classList.remove("error", "success", "info");
+    loginNotice.classList.add(noticeState, "is-shown");
 
-	// Display feedback
-	loginNotice.innerText = notice.text
-	loginNotice.classList.remove("error", "success", "neutral")
-	loginNotice.classList.add(state, "is-shown")
-
-	// Clear message
-	localStorage.removeItem("loginNotice")
+    // Clear message from localStorage if it was used
+    if (!text) {
+        localStorage.removeItem("loginNotice");
+    }
 }
+
 
 /**
  * Hide notice on login form.
  */
 function hideLoginNotice() {
-	loginNotice.classList.remove("is-shown")
+    loginNotice.classList.remove("is-shown");
 }
+
+
 
 /**
  * Handle password visibility toggle.
@@ -328,6 +352,8 @@ async function checkExistingLogin() {
 	if (!storedGroupAlias) {
 		return
 	}
+
+	const LOGIN_REDIRECT_URL = (storedGroupAlias === config.guestLogin.alias) ? config.login.redirectGuestUrl : config.login.redirectUrl
 
 	try {
 		// Test connection
@@ -417,7 +443,6 @@ function setLoginColumnLocation() {
 
 	if (config.login.columnLocation === "center") {
 		const loginForm = loginContainer.querySelector("#login-form")
-		const loginCover = loginContainer.querySelector(".login-cover")
 		loginContainer.style.justifyContent = "center"
 		loginContainer.style.backgroundImage = config.images.loginCover
 
@@ -520,4 +545,115 @@ function setUsernameType() {
 function dwClientLoadError() {
 	loginError(clientErrorMessage)
 	removeSkeleton()
+}
+
+
+// Get session data
+async function getSessions() {
+    try {
+        // Get data
+        const response = await fetch(config.licenseDataUrl + "/sessions");
+        const data = await response.json();
+
+        // Extract data for specified version
+        const index = data.findIndex(getDriveWorksVersionIndex);
+        const sessions = data[index].sessions;
+        if (sessions.length) {
+
+            // Sort by desc date order (newest first)
+            let sortedSessions = JSON.parse(JSON.stringify(sessions));
+            sortedSessions = sortedSessions.sort((a, b) => new Date(b.sessionStarted) - new Date(a.sessionStarted));
+
+            // Update session table (if: empty (page load) OR open + data has changed)
+            if (storedData.length === 0 || JSON.stringify(data) !== JSON.stringify(storedData)) {
+                getSessionLocations(sortedSessions);
+            }
+
+            // Store data for later comparison
+            storedData = data;
+
+            // Update session durations
+            calculateSessionLengths(sortedSessions);
+        } else {
+            // Show empty state (if previously hidden)
+            sessionsTable.classList.add("is-hidden");
+            sessionsEmpty.classList.remove("is-hidden");
+        }
+    } catch (error) {
+        console.log(error);
+    }
+
+    // Refresh on interval
+    setTimeout(getSessions, config.sessionRefreshInterval * 1000);
+}
+
+/**
+ * Extract configured DriveWorks version data from set
+ */
+function getDriveWorksVersionIndex(data) {
+    return (data.driveWorksMajorVersion || data.majorVersion) === config.driveWorksMajorVersion;
+}
+
+async function getActiveSessions() {
+    try {
+        // Fetch session data from the license API
+        const response = await fetch(`${config.licenseDataUrl}/sessions`);
+        const data = await response.json();
+
+        // Find the index for the correct DriveWorks version using the provided function
+        const index = data.findIndex(getDriveWorksVersionIndex);
+
+        // Check if a valid version was found
+        if (index === -1) {
+            throw new Error("Version not found");
+        }
+
+        // Get the number of active sessions
+        const activeSessions = data[index].sessions.length;
+
+        return activeSessions;
+    } catch (error) {
+        console.error("Error fetching active sessions:", error);
+        return null;  // Return null in case of an error
+    }
+}
+
+// Example usage:
+getActiveSessions().then(activeSessions => {
+    if (activeSessions !== null) {
+        console.log(`Active Sessions: ${activeSessions}`);
+    }
+});
+
+// Add this function to handle the session check
+async function checkActiveSessionsBeforeLogin() {
+    try {
+        const activeSessions = await getActiveSessions();
+        if (activeSessions >= config.maxConnections) {
+            // If active sessions exceed the limit, show error and disable login
+			setLoginNotice(atCapacityErrorMessage, "error");
+            recheckSessions();  // Start the interval recheck
+        } else {
+            // If active sessions are under the limit, enable login
+            enableButtons()
+			setLoginNotice("You may log in now.", "success");  // Show message allowing login
+        }
+    } catch (error) {
+        console.error("Error checking active sessions:", error);
+    }
+}
+
+// Function to recheck sessions at intervals
+function recheckSessions() {
+    setTimeout(async () => {
+        const activeSessions = await getActiveSessions();
+        if (activeSessions < config.maxConnections) {
+            // Enable login and inform user when sessions drop below the limit
+            enableButtons();
+			setLoginNotice("You may log in now.", "success");
+        } else {
+            // If still at max capacity, keep checking
+            recheckSessions();
+        }
+    }, config.sessionRefreshInterval * 1000);  // Recheck after config.sessionRefreshInterval
 }
