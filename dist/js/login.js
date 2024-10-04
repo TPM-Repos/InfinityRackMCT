@@ -43,7 +43,6 @@ let client;
 
 	setUsernameType()
 	setLoginCover()
-	addCarouselImages()
 
 	loginForm.addEventListener("submit", handleLoginForm)
 
@@ -82,6 +81,7 @@ let client;
 	setLoginColumnLocation()
 	setCopyright()
 	handlePasswordToggle()
+	addCarouselImages()
 	// how long until timing out trying to connect?
 	await delay(5000)
 	removeSkeleton()
@@ -427,47 +427,63 @@ function setLoginColumnLocation() {
 	}
 }
 
+
+
 function addCarouselImages() {
-	if (!config.images.carousel || config.images.carousel.enabled === false) {
-		return
+	if (!config.images.carousel || config.images.carousel.enabled === false || !config.images.carousel.images || config.images.carousel.images.length === 0) {
+		return;
 	}
 
-	const loginCover = document.querySelector(".login-cover")
+	if (config.images.carousel.images.length === 1) {
+		// if there is only one image, set it as the background image
+		loginCover.style.backgroundImage = `url(${config.images.carousel.images[0]})`;
+		return;
+	}
 
-	config.images.carousel.images.forEach((image) => {
-		const img = document.createElement("img")
-		img.src = image
-		loginCover.appendChild(img)
+	// otherwise add an image element for each image in the array, set the first image as active, and transition images every X seconds
+
+	// Create image elements
+	config.images.carousel.images.forEach((image, index) => {
+		const imageElement = document.createElement("img");
+		imageElement.src = image;
+		imageElement.id = `cover-image-${index+1}`;
+		imageElement.loading = "lazy";
+		imageElement.classList.add("login-cover");
+		imageElements.push(imageElement);
 	})
 
-	loginCover.firstElementChild.classList.add("active")
+	// Add image elements to login cover
+	loginCover.append(...imageElements);
 
-	interval = 7500
+	// set the first image as active
+	imageElements[0].classList.add("active");
+	// eager load this image
+	imageElements[0].loading = "eager";
+
+	// default interval is 7500ms
+	interval = 7500;
 
 	if (config.images.carousel.interval) {
-		interval = config.images.carousel.interval * 1000
+		// convert interval to milliseconds
+		interval = config.images.carousel.interval * 1000;
 	}
 
-	// call the transitionImages function every X seconds (milliseconds)
-	setInterval(transitionImages, interval)
+	// Call the transitionImages function every X seconds (milliseconds)
+	setInterval(transitionImages, interval);
 }
 
-// a function to transition the opacity of the images every X seconds
+
 function transitionImages() {
-	const images = document.querySelectorAll(".login-cover img")
-	const activeImage = document.querySelector(".login-cover img.active")
-
-	// get the index of the active image
-	const activeIndex = Array.from(images).indexOf(activeImage)
-
-	// remove the active class from the active image
-	activeImage.classList.remove("active")
-
-	// get the next image in the array
-	const nextImage = images[(activeIndex + 1) % images.length]
-
-	// add the active class to the next image
-	nextImage.classList.add("active")
+	// set the current image inactive
+	imageElements[currentIndex].classList.remove("active");
+	// roll over the current index if it's at the end of the array
+	if (currentIndex >= imageElements.length - 1) {
+		currentIndex = 0;
+	} else {
+		currentIndex++;
+	}
+	// set the current image as active
+	imageElements[currentIndex].classList.add("active");
 }
 
 // function to set the copyright information
