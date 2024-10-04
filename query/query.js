@@ -57,7 +57,7 @@
  */
 
 // Enable console output to assist debugging
-const DEBUG_MODE = false
+const DEBUG_MODE = config.debug
 
 // Load settings from config file (configUser.js)
 const REQUIRE_NEW_SESSION = config.query.requireNewSession
@@ -211,10 +211,10 @@ class SessionManager {
 	async restartSession() {
 		try {
 			await client.logoutAllGroups()
-			await this.startSession()
 		} catch (error) {
 			debug(error, true)
 		}
+		await this.startSession()
 	}
 
 	/**
