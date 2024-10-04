@@ -111,13 +111,16 @@ async function getSpecificationsWithQuery(
 	blockLazyLoading = false
 
 	try {
-		const specifications = await client.getAllSpecifications(
+		let specifications = await client.getAllSpecifications(
 			GROUP_ALIAS,
 			oDataQueryString,
 		)
 		if (!specifications) {
 			return
 		}
+		
+		// remove all specifications that have originalProjectId="CarportConfigurator"
+		specifications = specifications.filter(specification => specification.originalProjectName !== "CarportConfigurator")
 
 		// Remove empty message (if previously shown)
 		hideEmptyResults()
