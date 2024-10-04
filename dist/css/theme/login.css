@@ -73,13 +73,14 @@ button:disabled:hover {
 .login-form {
 	position: relative;
 	z-index: 2;
-	display: flex;
+	display: block;
 	flex-wrap: wrap;
 	flex-direction: column;
 	width: 100%;
 	padding: 2.5em 2em 1.5em;
 	text-align: center;
 	background: var(--loginForm-background, #fff);
+	color: var(--loginForm-textColor, #000);
 	box-shadow: var(--shadow-light);
 }
 
@@ -120,7 +121,7 @@ button:disabled:hover {
 }
 
 .login-logo {
-	margin-bottom: 2em;
+	/* margin-bottom: 2em; */
 }
 
 .login-logo img {
@@ -233,14 +234,18 @@ button:disabled:hover {
 	gap: 1rem;
 	margin: 1.25rem 0;
 	font-size: 0.875rem;
-	color: rgba(0, 0, 0, 0.5);
+	/* color: rgba(0, 0, 0, 0.5); */
+}
+
+a {
+	color: var(--color-primary);
 }
 
 .login-divider:before,
 .login-divider:after {
 	content: "";
 	flex: 1;
-	border: 1px solid rgba(0, 0, 0, 0.05);
+	border: 1px solid white;
 }
 
 .login-copyright {
@@ -272,7 +277,7 @@ button:disabled:hover {
 	}
 
 	.login-logo {
-		margin-bottom: 3em;
+		/* margin-bottom: 3em; */
 	}
 
 	.login-title {
